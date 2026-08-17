@@ -63,10 +63,13 @@ pub async fn list_issue_relationships_for_project(
     pool: &SqlitePool,
     project_id: Uuid,
 ) -> Result<Vec<IssueRelationship>, sqlx::Error> {
-    let rows: Vec<IssueRelationshipRow> = sqlx::query_as(&format!(
-        "{SELECT} JOIN issues i ON i.id = issue_relationships.issue_id \
-         WHERE i.project_id = ? ORDER BY issue_relationships.created_at"
-    ))
+    let rows: Vec<IssueRelationshipRow> = sqlx::query_as(
+        "SELECT issue_relationships.id, issue_relationships.issue_id, \
+         issue_relationships.related_issue_id, issue_relationships.relationship_type, \
+         issue_relationships.created_at FROM issue_relationships \
+         JOIN issues i ON i.id = issue_relationships.issue_id \
+         WHERE i.project_id = ? ORDER BY issue_relationships.created_at",
+    )
     .bind(project_id)
     .fetch_all(pool)
     .await?;

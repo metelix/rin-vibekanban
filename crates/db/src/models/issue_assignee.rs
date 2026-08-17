@@ -47,10 +47,12 @@ pub async fn list_issue_assignees_for_project(
     pool: &SqlitePool,
     project_id: Uuid,
 ) -> Result<Vec<IssueAssignee>, sqlx::Error> {
-    let rows: Vec<IssueAssigneeRow> = sqlx::query_as(&format!(
-        "{SELECT} JOIN issues i ON i.id = issue_assignees.issue_id \
-         WHERE i.project_id = ? ORDER BY issue_assignees.assigned_at"
-    ))
+    let rows: Vec<IssueAssigneeRow> = sqlx::query_as(
+        "SELECT issue_assignees.id, issue_assignees.issue_id, issue_assignees.user_id, \
+         issue_assignees.assigned_at FROM issue_assignees \
+         JOIN issues i ON i.id = issue_assignees.issue_id \
+         WHERE i.project_id = ? ORDER BY issue_assignees.assigned_at",
+    )
     .bind(project_id)
     .fetch_all(pool)
     .await?;
