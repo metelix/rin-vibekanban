@@ -1,9 +1,9 @@
 use api_types::{ListPullRequestsQuery, ListPullRequestsResponse};
 use axum::{
-    Json, Router,
     extract::{Query, State},
     response::Json as ResponseJson,
     routing::{get, post},
+    Json, Router,
 };
 use db::models::pull_request::PullRequest;
 use deployment::Deployment;
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use utils::response::ApiResponse;
 
-use crate::{DeploymentImpl, error::ApiError};
+use crate::{error::ApiError, DeploymentImpl};
 
 pub fn router() -> Router<DeploymentImpl> {
     Router::new()
@@ -20,12 +20,17 @@ pub fn router() -> Router<DeploymentImpl> {
 }
 
 async fn list_pull_requests(
-    State(deployment): State<DeploymentImpl>,
-    Query(query): Query<ListPullRequestsQuery>,
+    State(_deployment): State<DeploymentImpl>,
+    Query(_query): Query<ListPullRequestsQuery>,
 ) -> Result<ResponseJson<ApiResponse<ListPullRequestsResponse>>, ApiError> {
-    let client = deployment.remote_client()?;
-    let response = client.list_pull_requests(query.issue_id).await?;
-    Ok(ResponseJson(ApiResponse::success(response)))
+    // Self-hosted: pull requests are tracked locally per-workspace in the
+    // `pull_requests` table, but there is no per-issue PR listing available
+    // from local data. Return an empty list gracefully.
+    Ok(ResponseJson(ApiResponse::success(
+        ListPullRequestsResponse {
+            pull_requests: vec![],
+        },
+    )))
 }
 
 /// Tracks a PR in the local database so `pr_monitor` can poll for status

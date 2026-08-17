@@ -33,6 +33,17 @@ impl Project {
         .await
     }
 
+    pub async fn find_by_id(pool: &SqlitePool, id: Uuid) -> Result<Option<Self>, sqlx::Error> {
+        sqlx::query_as::<_, Project>(
+            "SELECT id, name, default_agent_working_dir, remote_project_id, created_at, updated_at
+             FROM projects
+             WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+    }
+
     pub async fn set_remote_project_id(
         pool: &SqlitePool,
         id: Uuid,
