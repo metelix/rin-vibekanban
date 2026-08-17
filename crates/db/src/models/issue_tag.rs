@@ -20,8 +20,8 @@ impl IssueTagRow {
     }
 }
 
-const SELECT: &str = r#"SELECT id as "id!: Uuid", issue_id as "issue_id!: Uuid", tag_id as "tag_id!: Uuid",
- created_at as "created_at!" FROM issue_tags"#;
+const SELECT: &str = r#"SELECT id, issue_id, tag_id,
+ created_at FROM issue_tags"#;
 
 pub async fn list_issue_tags(
     pool: &SqlitePool,
@@ -53,8 +53,8 @@ pub async fn create_issue_tag(
     let row: IssueTagRow = sqlx::query_as(
         r#"INSERT INTO issue_tags (id, issue_id, tag_id)
            VALUES (?,?,?) ON CONFLICT(issue_id, tag_id) DO NOTHING
-           RETURNING id as "id!: Uuid", issue_id as "issue_id!: Uuid", tag_id as "tag_id!: Uuid",
-             created_at as "created_at!""#,
+           RETURNING id, issue_id, tag_id,
+             created_at"#,
     )
     .bind(id)
     .bind(req.issue_id)

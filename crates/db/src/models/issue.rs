@@ -84,12 +84,12 @@ fn priority_to_sql(p: Option<IssuePriority>) -> Option<String> {
     })
 }
 
-const ISSUE_SELECT: &str = r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", issue_number as "issue_number!: i64",
- simple_id as "simple_id!", status_id as "status_id!: Uuid", title, description as "description: Option<String>",
- priority as "priority: Option<String>", start_date as "start_date: Option<String>", target_date as "target_date: Option<String>",
- completed_at as "completed_at: Option<String>", sort_order as "sort_order!: f64", parent_issue_id as "parent_issue_id: Uuid",
- parent_issue_sort_order as "parent_issue_sort_order: f64", extension_metadata as "extension_metadata!", creator_user_id as "creator_user_id: Uuid",
- created_at as "created_at!", updated_at as "updated_at!" FROM issues"#;
+const ISSUE_SELECT: &str = r#"SELECT id, project_id, issue_number,
+ simple_id, status_id, title, description,
+ priority, start_date, target_date,
+ completed_at, sort_order, parent_issue_id,
+ parent_issue_sort_order, extension_metadata, creator_user_id,
+ created_at, updated_at FROM issues"#;
 
 pub async fn allocate_issue_number(
     pool: &SqlitePool,
@@ -130,12 +130,12 @@ pub async fn create_issue(
            priority, start_date, target_date, completed_at, sort_order, parent_issue_id,
            parent_issue_sort_order, extension_metadata, creator_user_id, created_at, updated_at)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-           RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", issue_number as "issue_number!: i64",
-             simple_id as "simple_id!", status_id as "status_id!: Uuid", title, description as "description: Option<String>",
-             priority as "priority: Option<String>", start_date as "start_date: Option<String>", target_date as "target_date: Option<String>",
-             completed_at as "completed_at: Option<String>", sort_order as "sort_order!: f64", parent_issue_id as "parent_issue_id: Uuid",
-             parent_issue_sort_order as "parent_issue_sort_order: f64", extension_metadata as "extension_metadata!", creator_user_id as "creator_user_id: Uuid",
-             created_at as "created_at!", updated_at as "updated_at!""#,
+           RETURNING id, project_id, issue_number,
+             simple_id, status_id, title, description,
+             priority, start_date, target_date,
+             completed_at, sort_order, parent_issue_id,
+             parent_issue_sort_order, extension_metadata, creator_user_id,
+             created_at, updated_at"#,
     )
     .bind(id)
     .bind(project_id)

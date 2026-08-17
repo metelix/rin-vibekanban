@@ -25,8 +25,8 @@ impl IssueAssigneeRow {
     }
 }
 
-const SELECT: &str = r#"SELECT id as "id!: Uuid", issue_id as "issue_id!: Uuid", user_id as "user_id!: Uuid",
- assigned_at as "assigned_at!" FROM issue_assignees"#;
+const SELECT: &str = r#"SELECT id, issue_id, user_id,
+ assigned_at FROM issue_assignees"#;
 
 pub async fn list_issue_assignees(
     pool: &SqlitePool,
@@ -61,8 +61,8 @@ pub async fn create_issue_assignee(
     let row: IssueAssigneeRow = sqlx::query_as(
         r#"INSERT INTO issue_assignees (id, issue_id, user_id)
            VALUES (?,?,?) ON CONFLICT(issue_id, user_id) DO NOTHING
-           RETURNING id as "id!: Uuid", issue_id as "issue_id!: Uuid", user_id as "user_id!: Uuid",
-             assigned_at as "assigned_at!""#,
+           RETURNING id, issue_id, user_id,
+             assigned_at"#,
     )
     .bind(id)
     .bind(req.issue_id)

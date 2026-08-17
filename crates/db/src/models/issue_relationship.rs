@@ -40,8 +40,8 @@ fn rel_type_to_sql(t: IssueRelationshipType) -> &'static str {
     }
 }
 
-const SELECT: &str = r#"SELECT id as "id!: Uuid", issue_id as "issue_id!: Uuid",
- related_issue_id as "related_issue_id!: Uuid", relationship_type, created_at as "created_at!"
+const SELECT: &str = r#"SELECT id, issue_id,
+ related_issue_id, relationship_type, created_at
  FROM issue_relationships"#;
 
 pub async fn list_issue_relationships(
@@ -66,8 +66,8 @@ pub async fn create_issue_relationship(
     let row: IssueRelationshipRow = sqlx::query_as(
         r#"INSERT INTO issue_relationships (id, issue_id, related_issue_id, relationship_type)
            VALUES (?,?,?,?)
-           RETURNING id as "id!: Uuid", issue_id as "issue_id!: Uuid",
-             related_issue_id as "related_issue_id!: Uuid", relationship_type, created_at as "created_at!""#,
+           RETURNING id, issue_id,
+             related_issue_id, relationship_type, created_at"#,
     )
     .bind(id)
     .bind(req.issue_id)

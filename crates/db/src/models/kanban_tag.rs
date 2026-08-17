@@ -24,8 +24,8 @@ impl KanbanTagRow {
     }
 }
 
-const SELECT: &str = r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", name, color,
- created_at as "created_at!", updated_at as "updated_at!" FROM kanban_tags"#;
+const SELECT: &str = r#"SELECT id, project_id, name, color,
+ created_at, updated_at FROM kanban_tags"#;
 
 pub async fn list_tags(pool: &SqlitePool, project_id: Uuid) -> Result<Vec<Tag>, sqlx::Error> {
     let rows: Vec<KanbanTagRow> =
@@ -50,8 +50,8 @@ pub async fn create_tag(pool: &SqlitePool, req: &CreateTagRequest) -> Result<Tag
     let row: KanbanTagRow = sqlx::query_as(
         r#"INSERT INTO kanban_tags (id, project_id, name, color, created_at, updated_at)
            VALUES (?,?,?,?,?,?)
-           RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", name, color,
-             created_at as "created_at!", updated_at as "updated_at!""#,
+           RETURNING id, project_id, name, color,
+             created_at, updated_at"#,
     )
     .bind(id)
     .bind(req.project_id)
