@@ -83,7 +83,10 @@ pub fn router(deployment: &DeploymentImpl) -> Router {
 
     // Public (unauthenticated) routes.
     let v1_public = Router::new()
-        .route("/auth/methods", get(auth::auth_methods))
+        .route(
+            "/auth/methods",
+            get(auth::auth_methods).post(auth::auth_methods),
+        )
         .route("/auth/local/login", post(auth::local_login))
         .route("/tokens/refresh", post(auth::refresh_token));
 
