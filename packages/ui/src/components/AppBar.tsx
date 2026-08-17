@@ -518,10 +518,9 @@ export function AppBar({
       )}
     >
       <img
-        src="/rin-mark.png"
-        alt="RiN"
-        className="mb-base h-9 w-9 shrink-0 rounded-full object-contain"
-        style={{ background: "linear-gradient(135deg, #907aed, #e07ee8, #f4ba45)" }}
+        src="/rin-logo-horizontal.png"
+        alt="RiN family"
+        className="mb-base h-6 w-auto shrink-0 object-contain"
       />
       {sections.map((section) => (
         <div key={section.key} className="flex flex-col items-center gap-1">
