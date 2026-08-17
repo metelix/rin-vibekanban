@@ -1,16 +1,16 @@
 use api_types::Workspace as ApiWorkspace;
 use axum::{
+    Router,
     extract::{Path, State},
     response::Json as ResponseJson,
     routing::get,
-    Router,
 };
 use db::models::workspace::Workspace as DbWorkspace;
 use deployment::Deployment;
 use utils::response::ApiResponse;
 use uuid::Uuid;
 
-use crate::{error::ApiError, DeploymentImpl};
+use crate::{DeploymentImpl, error::ApiError};
 
 pub(super) fn router() -> Router<DeploymentImpl> {
     Router::new().route(

@@ -6,12 +6,12 @@ use axum::{
     routing::get,
 };
 use db::models::kanban_tag as kanban_tag_model;
+use deployment::Deployment;
 use serde::Deserialize;
 use utils::response::ApiResponse;
 use uuid::Uuid;
 
 use crate::{DeploymentImpl, error::ApiError};
-use deployment::Deployment;
 
 #[derive(Debug, Deserialize)]
 pub(super) struct ListTagsQuery {

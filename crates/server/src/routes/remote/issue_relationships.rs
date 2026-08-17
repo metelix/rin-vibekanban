@@ -9,11 +9,11 @@ use axum::{
     routing::get,
 };
 use db::models::issue_relationship as issue_relationship_model;
+use deployment::Deployment;
 use utils::response::ApiResponse;
 use uuid::Uuid;
 
 use crate::{DeploymentImpl, error::ApiError};
-use deployment::Deployment;
 
 pub(super) fn router() -> Router<DeploymentImpl> {
     Router::new()

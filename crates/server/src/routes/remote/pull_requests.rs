@@ -1,9 +1,9 @@
 use api_types::{ListPullRequestsQuery, ListPullRequestsResponse};
 use axum::{
+    Json, Router,
     extract::{Query, State},
     response::Json as ResponseJson,
     routing::{get, post},
-    Json, Router,
 };
 use db::models::pull_request::PullRequest;
 use deployment::Deployment;
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use utils::response::ApiResponse;
 
-use crate::{error::ApiError, DeploymentImpl};
+use crate::{DeploymentImpl, error::ApiError};
 
 pub fn router() -> Router<DeploymentImpl> {
     Router::new()

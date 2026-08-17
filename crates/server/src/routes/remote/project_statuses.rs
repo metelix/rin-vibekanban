@@ -1,9 +1,9 @@
 use api_types::ListProjectStatusesResponse;
 use axum::{
+    Router,
     extract::{Query, State},
     response::Json as ResponseJson,
     routing::get,
-    Router,
 };
 use db::models::project_status as project_status_model;
 use deployment::Deployment;
@@ -11,7 +11,7 @@ use serde::Deserialize;
 use utils::response::ApiResponse;
 use uuid::Uuid;
 
-use crate::{error::ApiError, DeploymentImpl};
+use crate::{DeploymentImpl, error::ApiError};
 
 #[derive(Debug, Deserialize)]
 pub(super) struct ListProjectStatusesQuery {

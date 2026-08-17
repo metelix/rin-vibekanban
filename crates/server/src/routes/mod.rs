@@ -30,10 +30,12 @@ pub mod sessions;
 pub mod ssh_session;
 pub mod tags;
 pub mod terminal;
+pub mod v1;
 pub mod webrtc;
 pub mod workspaces;
 
 pub fn router(deployment: DeploymentImpl) -> IntoMakeService<Router> {
+    let v1_router = v1::router(&deployment);
     let relay_signed_routes = Router::new()
         .route("/health", get(health::health_check))
         .merge(config::router())
@@ -79,6 +81,7 @@ pub fn router(deployment: DeploymentImpl) -> IntoMakeService<Router> {
 
     Router::new()
         .route("/", get(frontend::serve_frontend_root))
+        .nest("/v1", v1_router)
         .route("/{*path}", get(frontend::serve_frontend))
         .nest("/api", api_routes)
         .layer(CompressionLayer::new())
