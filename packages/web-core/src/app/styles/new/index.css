@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&family=IBM+Plex+Mono:ital,wght@0,100..700;1,100..700&family=Noto+Emoji:wght@300..700&family=Roboto:wght@500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&family=Noto+Sans+JP:wght@100..900&family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&family=IBM+Plex+Mono:ital,wght@0,100..700;1,100..700&family=Noto+Emoji:wght@300..700&family=Roboto:wght@500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -63,9 +63,9 @@ html {
     --text-normal: 0 0% 20%;
     --text-low: 0 0% 39%;
 
-    /* Background (light) - with VS Code overrides */
-    --_bg-primary-default: 0 0% 100%;
-    --_bg-secondary-default: 0 0% 95%;
+    /* Background (light) - with VS Code overrides → RiN lavender #f8f6ff */
+    --_bg-primary-default: 252 100% 98%;
+    --_bg-secondary-default: 250 100% 96%;
     --_bg-panel-default: 0 0% 89%;
     --bg-primary: var(--vscode-editor-background, var(--_bg-primary-default));
     --bg-secondary: var(
@@ -74,16 +74,35 @@ html {
     );
     --bg-panel: var(--vscode-input-background, var(--_bg-panel-default));
 
-    /* Accent (light) */
-    --brand: 25 82% 54%;
-    --brand-hover: 25 75% 62%;
-    --brand-secondary: 25 82% 37%;
+    /* Accent (light) → RiN brand (purple #907aed) */
+    --brand: 250 75% 70%;
+    --brand-hover: 252 81% 78%;
+    --brand-secondary: 256 74% 62%;
     --error: 0 59% 57%;
     --success: 117 38% 50%;
     --merged: 271 81% 46%;
 
     /* Text on accent */
     --text-on-brand: 0 0% 100%;
+
+    /* ── RiN design tokens ─────────────────────────────────── */
+    --rin-primary: 250 75% 70%;          /* #907aed */
+    --rin-primary-deep: 252 63% 61%;     /* #af80e5 */
+    --rin-pink: 300 72% 70%;             /* #e07ee8 */
+    --rin-amber: 38 89% 61%;             /* #f4ba45 */
+    --rin-ink: 247 51% 21%;              /* #201a44 */
+    --rin-ink-muted: 248 15% 33%;        /* #575277 */
+    --rin-lavender: 252 100% 98%;        /* #f8f6ff */
+    --rin-hairline: 302 100% 97%;        /* #fdeafe */
+    --rin-r-lg: 12px;
+    --rin-r-xl: 16px;
+    --rin-r-pill: 9999px;
+    --rin-shadow-sm: 0 1px 2px rgba(32, 26, 68, 0.05);
+    --rin-shadow-lg: 0 10px 20px rgba(32, 26, 68, 0.10);
+    --rin-shadow-xl: 0 20px 40px rgba(32, 26, 68, 0.14);
+    --rin-gradient: linear-gradient(135deg, #907aed, #e07ee8, #f4ba45);
+    --rin-font-brand: "Rubik", "Noto Sans JP", sans-serif;
+    --rin-font: "Noto Sans JP", "Roboto", sans-serif;
   }
 
   /* Dark mode */
@@ -471,10 +490,12 @@ html {
     font-size: var(--mobile-font-scale, 100%);
   }
 
-  /* Background colors for PWA safe-area */
+  /* Background colors for PWA safe-area → RiN lavender #f8f6ff */
   html,
   body {
-    background-color: #f2f2f2;
+    background-color: #f8f6ff;
+    font-family: "Noto Sans JP", "Roboto", sans-serif;
+    color: #201a44;
   }
 
   html.dark body,
