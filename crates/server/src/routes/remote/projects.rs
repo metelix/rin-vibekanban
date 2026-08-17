@@ -15,7 +15,10 @@ use crate::{error::ApiError, DeploymentImpl};
 
 #[derive(Debug, Deserialize)]
 pub(super) struct ListRemoteProjectsQuery {
-    pub organization_id: Uuid,
+    /// Optional org filter. When omitted (allowed so MCP `list_projects`
+    /// works without an org), projects are returned with a nil org id —
+    /// appropriate for self-hosted single-org deployment.
+    pub organization_id: Option<Uuid>,
 }
 
 pub(super) fn router() -> Router<DeploymentImpl> {
@@ -28,10 +31,11 @@ async fn list_remote_projects(
     State(deployment): State<DeploymentImpl>,
     Query(query): Query<ListRemoteProjectsQuery>,
 ) -> Result<ResponseJson<ApiResponse<ListProjectsResponse>>, ApiError> {
+    let org_id = query.organization_id.unwrap_or_else(Uuid::nil);
     let projects = DbProject::find_all(&deployment.db().pool)
         .await?
         .into_iter()
-        .map(|project| to_api_project(project, query.organization_id))
+        .map(|project| to_api_project(project, org_id))
         .collect();
     Ok(ResponseJson(ApiResponse::success(ListProjectsResponse {
         projects,
