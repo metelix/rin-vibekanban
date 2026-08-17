@@ -18,20 +18,20 @@ RUN pnpm config set store-dir /pnpm/store
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY patches/ patches/
-COPY packages/local-web/package.json packages/local-web/package.json
+COPY packages/remote-web/package.json packages/remote-web/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/web-core/package.json packages/web-core/package.json
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-COPY packages/local-web/ packages/local-web/
+COPY packages/remote-web/ packages/remote-web/
 COPY packages/public/ packages/public/
 COPY packages/ui/ packages/ui/
 COPY packages/web-core/ packages/web-core/
 COPY shared/ shared/
 
-RUN pnpm -C packages/local-web build
+RUN pnpm -C packages/remote-web build
 
 FROM rust:1.93-slim-bookworm AS builder
 
@@ -127,7 +127,7 @@ COPY crates/workspace-manager/ crates/workspace-manager/
 COPY crates/worktree-manager/ crates/worktree-manager/
 COPY crates/ws-bridge/ crates/ws-bridge/
 COPY assets/ assets/
-COPY --from=fe-builder /app/packages/local-web/dist packages/local-web/dist
+COPY --from=fe-builder /app/packages/remote-web/dist packages/remote-web/dist
 
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \

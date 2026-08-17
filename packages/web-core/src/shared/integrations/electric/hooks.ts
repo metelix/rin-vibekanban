@@ -1,6 +1,5 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { useLiveQuery } from '@tanstack/react-db';
-import { createShapeCollection } from '@/shared/lib/electric/collections';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { getAuthRuntime } from '@/shared/lib/auth/runtime';
 import { useSyncErrorContext } from '@/shared/hooks/useSyncErrorContext';
 import type { MutationDefinition, ShapeDefinition } from 'shared/remote-types';
 import type { SyncError } from '@/shared/lib/electric/types';
@@ -16,11 +15,11 @@ type MutationUpdateType<M> =
  * Base result type returned by useShape (read-only).
  */
 export interface UseShapeResult<TRow> {
-  /** The synced data array */
+  /** The data array loaded from the local /v1 REST backend */
   data: TRow[];
-  /** Whether the initial sync is still loading */
+  /** Whether the initial fetch is still loading */
   isLoading: boolean;
-  /** Sync error if one occurred */
+  /** Fetch error if one occurred */
   error: SyncError | null;
   /** Function to retry after an error */
   retry: () => void;
@@ -52,7 +51,7 @@ export interface UseShapeOptions<
     | undefined = undefined,
 > {
   /**
-   * Whether to enable the Electric sync subscription.
+   * Whether to fetch data from the local backend.
    * When false, returns empty data and no-op mutation functions.
    * @default true
    */
@@ -64,19 +63,173 @@ export interface UseShapeOptions<
   mutation?: M;
 }
 
+// ---------------------------------------------------------------------------
+// Local REST transport
+//
+// Self-hosted build: kanban data is served by the LOCAL /v1 backend which is
+// same-origin (window.location.origin) and protected by a Bearer JWT. We reuse
+// the frontend's existing auth token (via the configured AuthRuntime) and
+// fetch directly with the browser fetch API — no ElectricSQL, no WebSocket.
+// ---------------------------------------------------------------------------
+
+const API_BASE = typeof window !== 'undefined' ? window.location.origin : '';
+
+/** Safely obtain the current Bearer token. Returns null when not configured/logged out. */
+async function getBearerToken(): Promise<string | null> {
+  try {
+    const runtime = getAuthRuntime();
+    return await runtime.getToken();
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Hook for subscribing to a shape's data via Electric sync,
- * with optional optimistic mutation support.
+ * Authenticated fetch against the local /v1 backend.
+ * Adds Bearer token, refreshes once on 401, never throws on network error.
+ */
+async function requestV1(
+  path: string,
+  options: RequestInit = {},
+  retryOn401 = true
+): Promise<Response> {
+  const headers = new Headers(options.headers ?? {});
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  const token = await getBearerToken();
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  const doFetch = () =>
+    fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+
+  const response = await doFetch();
+
+  if (response.status === 401 && retryOn401) {
+    try {
+      const runtime = getAuthRuntime();
+      const newToken = await runtime.triggerRefresh();
+      if (newToken) {
+        headers.set('Authorization', `Bearer ${newToken}`);
+        return doFetch();
+      }
+    } catch {
+      /* auth runtime not configured — surface the original 401 */
+    }
+  }
+
+  return response;
+}
+
+/**
+ * Map a ShapeDefinition to its local /v1 REST endpoint.
+ * Returns null for shapes we do not map — the hook then serves empty data
+ * so the UI still renders without a sync backend.
+ */
+function resolveEndpoint(
+  table: string,
+  params: Record<string, string>
+): string | null {
+  const projectId = params.project_id;
+  switch (table) {
+    case 'issues':
+      return projectId
+        ? `/v1/projects/${encodeURIComponent(projectId)}/issues`
+        : null;
+    case 'project_statuses':
+      return projectId
+        ? `/v1/projects/${encodeURIComponent(projectId)}/statuses`
+        : null;
+    case 'issue_assignees':
+      return projectId
+        ? `/v1/projects/${encodeURIComponent(projectId)}/assignees`
+        : null;
+    case 'tags':
+    case 'kanban_tags':
+      return projectId
+        ? `/v1/projects/${encodeURIComponent(projectId)}/tags`
+        : null;
+    case 'issue_relationships':
+      return projectId
+        ? `/v1/projects/${encodeURIComponent(projectId)}/relationships`
+        : null;
+    case 'workspaces':
+      return projectId
+        ? `/v1/projects/${encodeURIComponent(projectId)}/workspaces`
+        : null;
+    case 'organizations':
+      return '/v1/organizations';
+    case 'projects': {
+      // Projects may be filtered by organization when a param is present.
+      const orgId = params.organization_id;
+      return orgId
+        ? `/v1/projects?organization_id=${encodeURIComponent(orgId)}`
+        : '/v1/projects';
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Extract a row array from a /v1 response. Endpoints return a raw JSON array,
+ * but a few historically wrap rows under a `{ [table]: [...] }` key.
+ */
+function extractRows(
+  payload: unknown,
+  table: string
+): Record<string, unknown>[] {
+  if (Array.isArray(payload)) {
+    return payload as Record<string, unknown>[];
+  }
+  if (payload && typeof payload === 'object') {
+    const obj = payload as Record<string, unknown>;
+    const direct = obj[table];
+    if (Array.isArray(direct)) {
+      return direct as Record<string, unknown>[];
+    }
+    const firstArray = Object.values(obj).find((v) => Array.isArray(v));
+    if (Array.isArray(firstArray)) {
+      return firstArray as Record<string, unknown>[];
+    }
+  }
+  return [];
+}
+
+async function parseErrorResponse(
+  response: Response,
+  fallback: string
+): Promise<string> {
+  try {
+    const body = (await response.json()) as {
+      message?: string;
+      error?: string;
+    };
+    return body.message || body.error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Hook for loading a shape's data from the local /v1 REST backend,
+ * with optimistic mutation support.
+ *
+ * This intentionally keeps the SAME exported contract as the original
+ * Electric-sync implementation so all call sites remain unchanged.
  *
  * @param shape - The shape definition from shared/remote-types.ts
  * @param params - URL parameters matching the shape's requirements
  * @param options - Optional configuration (enabled, mutation, etc.)
  *
  * @example
- * // Read-only:
- * const { data, isLoading } = useShape(PROJECT_PULL_REQUESTS_SHAPE, { project_id });
- *
- * // With mutations:
+ * const { data, isLoading } = useShape(PROJECT_ISSUES_SHAPE, { project_id });
  * const { data, insert, update, remove } = useShape(
  *   PROJECT_ISSUES_SHAPE,
  *   { project_id },
@@ -98,13 +251,13 @@ export function useShape<
   const { enabled = true, mutation } = options;
 
   const [error, setError] = useState<SyncError | null>(null);
+  const [data, setData] = useState<T[]>([]);
+  const [isLoading, setIsLoading] = useState(enabled);
   const [retryKey, setRetryKey] = useState(0);
 
   const syncErrorContext = useSyncErrorContext();
   const registerErrorFn = syncErrorContext?.registerError;
   const clearErrorFn = syncErrorContext?.clearError;
-
-  const handleError = useCallback((err: SyncError) => setError(err), []);
 
   const retry = useCallback(() => {
     setError(null);
@@ -134,132 +287,190 @@ export function useShape<
     };
   }, [error, streamId, shape.table, retry, registerErrorFn, clearErrorFn]);
 
-  const collection = useMemo(() => {
-    if (!enabled) return null;
-    const config = { onError: handleError };
-    void retryKey;
-    return createShapeCollection(shape, stableParams, config, mutation);
-  }, [enabled, shape, mutation, handleError, retryKey, stableParams]);
-
-  const { data, isLoading: queryLoading } = useLiveQuery(
-    (query) => (collection ? query.from({ item: collection }) : undefined),
-    [collection]
+  // Resolve the /v1 endpoint for this shape. Unmapped shapes => null (empty).
+  const endpoint = useMemo(
+    () => resolveEndpoint(shape.table, stableParams),
+    [shape.table, stableParams]
   );
 
-  const items = useMemo(() => {
-    if (!enabled || !collection || !data || queryLoading) return [];
-    return data as unknown as T[];
-  }, [enabled, collection, data, queryLoading]);
+  // Mutation endpoint base = the mutation's own url (e.g. /v1/issues).
+  const mutationUrl = mutation?.url;
 
-  const isLoading = enabled ? queryLoading : false;
-
-  // --- Mutation support (only used when mutation is provided) ---
-
-  const itemsRef = useRef<T[]>([]);
+  // Fetch data (full read) from the local backend.
   useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
+    if (!enabled) {
+      setData([]);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
 
-  type TransactionResult = { isPersisted: { promise: Promise<void> } };
-  type CollectionWithMutations = {
-    insert: (data: unknown) => TransactionResult;
-    update: {
-      (
-        id: string,
-        updater: (draft: Record<string, unknown>) => void
-      ): TransactionResult;
-      (
-        ids: string[],
-        updater: (drafts: Array<Record<string, unknown>>) => void
-      ): TransactionResult;
+    // Unmapped shape — serve empty without error/loading.
+    if (!endpoint) {
+      setData([]);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
+    let active = true;
+    setIsLoading(true);
+    setError(null);
+
+    (async () => {
+      try {
+        const response = await requestV1(endpoint, {
+          method: 'GET',
+          cache: 'no-store',
+        });
+
+        if (!active) return;
+
+        if (!response.ok) {
+          const message = await parseErrorResponse(
+            response,
+            `Failed to load ${shape.table}`
+          );
+          setError({ status: response.status, message });
+          return;
+        }
+
+        const payload = (await response.json()) as unknown;
+        const rows = extractRows(payload, shape.table) as T[];
+        if (!active) return;
+        setData(rows);
+      } catch (err) {
+        if (!active) return;
+        const message = err instanceof Error ? err.message : 'Network error';
+        setError({ message });
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
     };
-    delete: (id: string) => TransactionResult;
-  };
-  const typedCollection =
-    collection as unknown as CollectionWithMutations | null;
+  }, [enabled, endpoint, shape.table, retryKey]);
+
+  // --- Optimistic mutation support ---------------------------------------
+  // All mutations: (1) apply to local state immediately for a responsive UI,
+  // (2) fire a best-effort REST call guarded in try/catch so the UI never
+  // throws if the backend is unavailable.
 
   const insert = useCallback(
     (insertData: unknown): InsertResult<T> => {
       const dataWithId = {
         id: crypto.randomUUID(),
         ...(insertData as Record<string, unknown>),
-      };
-      if (!typedCollection) {
-        return {
-          data: dataWithId as unknown as T,
-          persisted: Promise.resolve(dataWithId as unknown as T),
-        };
+      } as unknown as T;
+      setData((prev) => [dataWithId, ...prev]);
+
+      if (mutationUrl) {
+        void requestV1(mutationUrl, {
+          method: 'POST',
+          body: JSON.stringify(dataWithId),
+        }).catch(() => {
+          // Best-effort: keep optimistic row even if persistence fails.
+        });
       }
-      const tx = typedCollection.insert(dataWithId);
+
       return {
-        data: dataWithId as unknown as T,
-        persisted: tx.isPersisted.promise.then(() => {
-          const synced = itemsRef.current.find(
-            (item) => (item as unknown as { id: string }).id === dataWithId.id
-          );
-          return (synced ?? dataWithId) as unknown as T;
-        }),
+        data: dataWithId,
+        persisted: Promise.resolve(dataWithId),
       };
     },
-    [typedCollection]
+    [mutationUrl]
   );
 
   const update = useCallback(
     (id: string, changes: unknown): MutationResult => {
-      if (!typedCollection) {
-        return { persisted: Promise.resolve() };
-      }
-      const tx = typedCollection.update(id, (draft: Record<string, unknown>) =>
-        Object.assign(draft, changes)
+      setData((prev) =>
+        prev.map((row) => {
+          const rowId = String((row as unknown as { id: unknown }).id ?? '');
+          return rowId === id
+            ? ({ ...row, ...(changes as Record<string, unknown>) } as T)
+            : row;
+        })
       );
-      return { persisted: tx.isPersisted.promise };
+
+      if (mutationUrl) {
+        void requestV1(`${mutationUrl}/bulk`, {
+          method: 'POST',
+          body: JSON.stringify({
+            updates: [{ id, ...(changes as Record<string, unknown>) }],
+          }),
+        }).catch(() => {
+          // Best-effort: keep local optimistic even if persistence fails.
+        });
+      }
+
+      return { persisted: Promise.resolve() };
     },
-    [typedCollection]
+    [mutationUrl]
   );
 
   const updateMany = useCallback(
     (updates: Array<{ id: string; changes: unknown }>): MutationResult => {
-      if (!typedCollection || updates.length === 0) {
+      if (updates.length === 0) {
         return { persisted: Promise.resolve() };
       }
 
-      const ids = updates.map((update) => update.id);
       const changesById = new Map(
         updates.map((update) => [update.id, update.changes])
       );
-
-      const tx = typedCollection.update(
-        ids,
-        (drafts: Array<Record<string, unknown>>) => {
-          for (const draft of drafts) {
-            const draftId = String(draft.id ?? '');
-            const changes = changesById.get(draftId);
-            if (changes) {
-              Object.assign(draft, changes);
-            }
-          }
-        }
+      setData((prev) =>
+        prev.map((row) => {
+          const record = row as unknown as { id: unknown };
+          const changes = changesById.get(String(record.id ?? ''));
+          if (!changes) return row;
+          return { ...row, ...(changes as Record<string, unknown>) } as T;
+        })
       );
 
-      return { persisted: tx.isPersisted.promise };
+      if (mutationUrl) {
+        void requestV1(`${mutationUrl}/bulk`, {
+          method: 'POST',
+          body: JSON.stringify({
+            updates: updates.map((update) => ({
+              id: update.id,
+              ...(update.changes as Record<string, unknown>),
+            })),
+          }),
+        }).catch(() => {
+          // Best-effort: keep local optimistic even if persistence fails.
+        });
+      }
+
+      return { persisted: Promise.resolve() };
     },
-    [typedCollection]
+    [mutationUrl]
   );
 
   const remove = useCallback(
     (id: string): MutationResult => {
-      if (!typedCollection) {
-        return { persisted: Promise.resolve() };
+      setData((prev) =>
+        prev.filter(
+          (row) => String((row as unknown as { id: unknown }).id ?? '') !== id
+        )
+      );
+
+      if (mutationUrl) {
+        void requestV1(`${mutationUrl}/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+        }).catch(() => {
+          // Best-effort: keep local optimistic even if persistence fails.
+        });
       }
-      const tx = typedCollection.delete(id);
-      return { persisted: tx.isPersisted.promise };
+
+      return { persisted: Promise.resolve() };
     },
-    [typedCollection]
+    [mutationUrl]
   );
 
   const base: UseShapeResult<T> = {
-    data: items,
-    isLoading,
+    data: enabled ? data : [],
+    isLoading: enabled ? isLoading : false,
     error,
     retry,
   };

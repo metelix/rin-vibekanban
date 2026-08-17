@@ -7,7 +7,7 @@ use reqwest::{StatusCode, header};
 use rust_embed::RustEmbed;
 
 #[derive(RustEmbed)]
-#[folder = "../../packages/local-web/dist"]
+#[folder = "../../packages/remote-web/dist"]
 struct Assets;
 
 pub(super) async fn serve_frontend(uri: axum::extract::Path<String>) -> impl IntoResponse {
