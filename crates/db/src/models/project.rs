@@ -44,6 +44,25 @@ impl Project {
         .await
     }
 
+    /// Insert a new local project with the given id and name. Timestamps are
+    /// written in RFC3339. Returns the persisted row.
+    pub async fn insert(pool: &SqlitePool, id: Uuid, name: &str) -> Result<Self, sqlx::Error> {
+        use chrono::Utc;
+        let now = Utc::now().to_rfc3339();
+        let row: Self = sqlx::query_as::<_, Project>(
+            "INSERT INTO projects (id, name, created_at, updated_at) \
+             VALUES (?, ?, ?, ?) \
+             RETURNING id, name, default_agent_working_dir, remote_project_id, created_at, updated_at",
+        )
+        .bind(id)
+        .bind(name)
+        .bind(&now)
+        .bind(&now)
+        .fetch_one(pool)
+        .await?;
+        Ok(row)
+    }
+
     pub async fn set_remote_project_id(
         pool: &SqlitePool,
         id: Uuid,

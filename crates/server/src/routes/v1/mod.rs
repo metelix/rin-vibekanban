@@ -14,6 +14,8 @@ mod auth;
 mod identity;
 mod jwt;
 mod middleware;
+mod orgs;
+mod projects;
 
 pub use jwt::JwtService;
 
@@ -94,6 +96,10 @@ pub fn router(deployment: &DeploymentImpl) -> Router {
     let v1_protected = Router::new()
         .route("/identity", get(identity::get_identity))
         .route("/oauth/logout", post(auth::logout))
+        .route("/organizations", get(orgs::list_organizations))
+        .route("/organizations/{id}", get(orgs::get_organization))
+        .route("/projects", get(projects::list_projects))
+        .route("/projects", post(projects::create_project))
         .route_layer(from_fn_with_state(
             state.clone(),
             middleware::require_session,
