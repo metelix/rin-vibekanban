@@ -10,7 +10,7 @@ pub struct ProjectStatusRow {
     pub name: String,
     pub color: String,
     pub sort_order: i64,
-    pub hidden: bool,
+    pub hidden: i64,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -23,7 +23,7 @@ impl ProjectStatusRow {
             name: self.name,
             color: self.color,
             sort_order: self.sort_order as i32,
-            hidden: self.hidden,
+            hidden: self.hidden != 0,
             created_at: DateTime::parse_from_rfc3339(&self.created_at)
                 .ok()
                 .map(|d| d.with_timezone(&Utc))
@@ -33,7 +33,7 @@ impl ProjectStatusRow {
 }
 
 const SELECT: &str = r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", name, color,
- sort_order as "sort_order!: i64", hidden as "hidden!: bool", created_at as "created_at!", updated_at as "updated_at!"
+ sort_order as "sort_order!: i64", hidden as "hidden!: i64", created_at as "created_at!", updated_at as "updated_at!"
  FROM project_statuses"#;
 
 pub async fn list_project_statuses(
@@ -71,7 +71,7 @@ pub async fn create_project_status(
         r#"INSERT INTO project_statuses (id, project_id, name, color, sort_order, hidden, created_at, updated_at)
            VALUES (?,?,?,?,?,?,?,?)
            RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", name, color,
-             sort_order as "sort_order!: i64", hidden as "hidden!: bool", created_at as "created_at!", updated_at as "updated_at!""#,
+             sort_order as "sort_order!: i64", hidden as "hidden!: i64", created_at as "created_at!", updated_at as "updated_at!""#,
     )
     .bind(id)
     .bind(req.project_id)
@@ -148,7 +148,7 @@ pub async fn ensure_default_statuses(
             r#"INSERT INTO project_statuses (id, project_id, name, color, sort_order, hidden, created_at, updated_at)
                VALUES (?,?,?,?,?,0,datetime('now'),datetime('now'))
                RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", name, color,
-                 sort_order as "sort_order!: i64", hidden as "hidden!: bool", created_at as "created_at!", updated_at as "updated_at!""#,
+                 sort_order as "sort_order!: i64", hidden as "hidden!: i64", created_at as "created_at!", updated_at as "updated_at!""#,
         )
         .bind(Uuid::new_v4())
         .bind(project_id)
