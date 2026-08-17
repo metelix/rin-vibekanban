@@ -42,6 +42,21 @@ pub async fn list_issue_assignees(
     Ok(rows.into_iter().map(|r| r.into_api()).collect())
 }
 
+/// List assignees for every issue in a project (join on `issues.project_id`).
+pub async fn list_issue_assignees_for_project(
+    pool: &SqlitePool,
+    project_id: Uuid,
+) -> Result<Vec<IssueAssignee>, sqlx::Error> {
+    let rows: Vec<IssueAssigneeRow> = sqlx::query_as(&format!(
+        "{SELECT} JOIN issues i ON i.id = issue_assignees.issue_id \
+         WHERE i.project_id = ? ORDER BY issue_assignees.assigned_at"
+    ))
+    .bind(project_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|r| r.into_api()).collect())
+}
+
 pub async fn get_issue_assignee(
     pool: &SqlitePool,
     id: Uuid,

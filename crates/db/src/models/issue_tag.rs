@@ -37,6 +37,21 @@ pub async fn list_issue_tags(
     Ok(rows.into_iter().map(|r| r.into_api()).collect())
 }
 
+/// List issue-tag links for every issue in a project (join on `issues.project_id`).
+pub async fn list_issue_tags_for_project(
+    pool: &SqlitePool,
+    project_id: Uuid,
+) -> Result<Vec<IssueTag>, sqlx::Error> {
+    let rows: Vec<IssueTagRow> = sqlx::query_as(&format!(
+        "{SELECT} JOIN issues i ON i.id = issue_tags.issue_id \
+         WHERE i.project_id = ? ORDER BY issue_tags.issue_id, issue_tags.created_at"
+    ))
+    .bind(project_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|r| r.into_api()).collect())
+}
+
 pub async fn get_issue_tag(pool: &SqlitePool, id: Uuid) -> Result<Option<IssueTag>, sqlx::Error> {
     let row: Option<IssueTagRow> = sqlx::query_as(&format!("{} WHERE id = ?", SELECT))
         .bind(id)

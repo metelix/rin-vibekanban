@@ -13,6 +13,7 @@ use crate::DeploymentImpl;
 mod auth;
 mod identity;
 mod jwt;
+mod kanban;
 mod middleware;
 mod orgs;
 mod projects;
@@ -100,6 +101,34 @@ pub fn router(deployment: &DeploymentImpl) -> Router {
         .route("/organizations/{id}", get(orgs::get_organization))
         .route("/projects", get(projects::list_projects))
         .route("/projects", post(projects::create_project))
+        .route("/projects/{project_id}/issues", get(kanban::list_issues))
+        .route(
+            "/projects/{project_id}/statuses",
+            get(kanban::list_statuses),
+        )
+        .route(
+            "/projects/{project_id}/assignees",
+            get(kanban::list_assignees),
+        )
+        .route("/projects/{project_id}/tags", get(kanban::list_tags))
+        .route(
+            "/projects/{project_id}/relationships",
+            get(kanban::list_relationships),
+        )
+        .route(
+            "/projects/{project_id}/issue_tags",
+            get(kanban::list_issue_tags),
+        )
+        .route(
+            "/projects/{project_id}/comments",
+            get(kanban::list_comments),
+        )
+        .route("/issues/bulk", post(kanban::bulk_update_issues))
+        .route(
+            "/project_statuses/bulk",
+            post(kanban::bulk_update_project_statuses),
+        )
+        .route("/projects/bulk", post(kanban::bulk_update_projects))
         .route_layer(from_fn_with_state(
             state.clone(),
             middleware::require_session,

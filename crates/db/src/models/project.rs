@@ -1,3 +1,4 @@
+use api_types::UpdateProjectRequest;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
@@ -68,16 +69,38 @@ impl Project {
         id: Uuid,
         remote_project_id: Option<Uuid>,
     ) -> Result<(), sqlx::Error> {
-        sqlx::query!(
-            r#"UPDATE projects
-               SET remote_project_id = $2
-               WHERE id = $1"#,
-            id,
-            remote_project_id
-        )
-        .execute(pool)
-        .await?;
+        sqlx::query("UPDATE projects SET remote_project_id = ? WHERE id = ?")
+            .bind(remote_project_id)
+            .bind(id)
+            .execute(pool)
+            .await?;
 
         Ok(())
+    }
+
+    /// Apply a partial update to a local project. The self-hosted `projects`
+    /// table only has a `name` column (no color/sort_order), so only `name`
+    /// is written; color/sort_order in the request are ignored. Returns the
+    /// updated row, or `None` if the project does not exist.
+    pub async fn update(
+        pool: &SqlitePool,
+        id: Uuid,
+        req: &UpdateProjectRequest,
+    ) -> Result<Option<Self>, sqlx::Error> {
+        let existing = match Self::find_by_id(pool, id).await? {
+            Some(p) => p,
+            None => return Ok(None),
+        };
+        let name = req.name.clone().unwrap_or(existing.name);
+        let now = Utc::now().to_rfc3339();
+
+        sqlx::query("UPDATE projects SET name = ?, updated_at = ? WHERE id = ?")
+            .bind(&name)
+            .bind(&now)
+            .bind(id)
+            .execute(pool)
+            .await?;
+
+        Self::find_by_id(pool, id).await
     }
 }
