@@ -29,6 +29,9 @@ COPY packages/remote-web/ packages/remote-web/
 COPY packages/public/ packages/public/
 COPY packages/ui/ packages/ui/
 COPY packages/web-core/ packages/web-core/
+# web-core styles reference local-web/tailwind.new.config.js via @config (relative path).
+# remote-web build needs that file present even though it doesn't compile local-web.
+COPY packages/local-web/tailwind.new.config.js packages/local-web/tailwind.new.config.js
 COPY shared/ shared/
 
 RUN pnpm -C packages/remote-web build
