@@ -518,7 +518,7 @@ export function AppBar({
       )}
     >
       <img
-        src="/assets/rin-mark.png"
+        src="/rin-mark.png"
         alt="RiN"
         className="mb-base h-9 w-9 shrink-0 rounded-full object-contain"
         style={{ background: "linear-gradient(135deg, #907aed, #e07ee8, #f4ba45)" }}
