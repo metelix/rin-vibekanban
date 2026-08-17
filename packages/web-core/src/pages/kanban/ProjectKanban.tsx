@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { OrgProvider } from '@/shared/providers/remote/OrgProvider';
+import { useOrgContext } from '@/shared/hooks/useOrgContext';
+import { ProjectProvider } from '@/shared/providers/remote/ProjectProvider';
+import { useProjectContext } from '@/shared/hooks/useProjectContext';
+import { useActions } from '@/shared/hooks/useActions';
+import { KanbanContainer } from '@/features/kanban/ui/KanbanContainer';
 import { LoginRequiredPrompt } from '@/shared/dialogs/shared/LoginRequiredPrompt';
 import { useUserOrganizations } from '@/shared/hooks/useUserOrganizations';
 import { useOrganizationProjects } from '@/shared/hooks/useOrganizationProjects';
@@ -10,7 +16,117 @@ import {
   buildKanbanIssueComposerKey,
   closeKanbanIssueComposer,
 } from '@/shared/stores/useKanbanIssueComposerStore';
-import { ProjectSunsetPage } from './ProjectSunsetPage';
+
+/**
+ * Component that registers project mutations with ActionsContext.
+ * Must be rendered inside both ActionsProvider and ProjectProvider.
+ */
+function ProjectMutationsRegistration({ children }: { children: ReactNode }) {
+  const { registerProjectMutations } = useActions();
+  const { removeIssue, insertIssue, getIssue, getAssigneesForIssue, issues } =
+    useProjectContext();
+
+  // Use ref to always access latest issues (avoid stale closure)
+  const issuesRef = useRef(issues);
+  useEffect(() => {
+    issuesRef.current = issues;
+  }, [issues]);
+
+  useEffect(() => {
+    registerProjectMutations({
+      removeIssue: (id) => {
+        removeIssue(id);
+      },
+      duplicateIssue: (issueId) => {
+        const issue = getIssue(issueId);
+        if (!issue) return;
+
+        // Use ref to get current issues (not stale closure)
+        const currentIssues = issuesRef.current;
+        const statusIssues = currentIssues.filter(
+          (i) => i.status_id === issue.status_id
+        );
+        const minSortOrder =
+          statusIssues.length > 0
+            ? Math.min(...statusIssues.map((i) => i.sort_order))
+            : 0;
+
+        insertIssue({
+          project_id: issue.project_id,
+          status_id: issue.status_id,
+          title: `${issue.title} (Copy)`,
+          description: issue.description,
+          priority: issue.priority,
+          sort_order: minSortOrder - 1,
+          start_date: issue.start_date,
+          target_date: issue.target_date,
+          completed_at: null,
+          parent_issue_id: issue.parent_issue_id,
+          parent_issue_sort_order: issue.parent_issue_sort_order,
+          extension_metadata: issue.extension_metadata,
+        });
+      },
+      getIssue,
+      getAssigneesForIssue,
+    });
+
+    return () => {
+      registerProjectMutations(null);
+    };
+  }, [
+    registerProjectMutations,
+    removeIssue,
+    insertIssue,
+    getIssue,
+    getAssigneesForIssue,
+  ]);
+
+  return <>{children}</>;
+}
+
+function ProjectKanbanBoard() {
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <div className="min-h-0 flex-1">
+        <KanbanContainer />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Inner component that renders the Kanban board once we have the org context
+ */
+function ProjectKanbanInner({ projectId }: { projectId: string }) {
+  const { t } = useTranslation('common');
+  const { projects, isLoading } = useOrgContext();
+
+  const project = projects.find((p) => p.id === projectId);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full w-full">
+        <p className="text-low">{t('states.loading')}</p>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="flex items-center justify-center h-full w-full">
+        <p className="text-low">{t('kanban.noProjectFound')}</p>
+      </div>
+    );
+  }
+
+  return (
+    <ProjectProvider projectId={projectId}>
+      <ProjectMutationsRegistration>
+        <ProjectKanbanBoard />
+      </ProjectMutationsRegistration>
+    </ProjectProvider>
+  );
+}
 
 /**
  * Hook to find a project by ID, using orgId from Zustand store
@@ -52,7 +168,9 @@ function useFindProjectById(projectId: string | undefined) {
  * Note: issue creation is composer-store state on top of /projects/:projectId.
  *
  * Note: This component is rendered inside SharedAppLayout which provides
- * NavbarContainer, AppBar, and SyncErrorProvider.
+ * NavbarContainer, AppBar, and SyncErrorProvider. It supplies OrgProvider and
+ * ProjectProvider (both backed by the /v1 REST useShape hooks) which feed
+ * KanbanContainer.
  */
 export function ProjectKanban() {
   const { projectId, hostId } = useCurrentKanbanRouteState();
@@ -76,9 +194,7 @@ export function ProjectKanban() {
   }, [issueComposerKey]);
 
   // Find the project and get its organization
-  const { project, organizationId, isLoading } = useFindProjectById(
-    projectId ?? undefined
-  );
+  const { organizationId, isLoading } = useFindProjectById(projectId ?? undefined);
 
   // Show loading while auth state is being determined
   if (!authLoaded || isLoading) {
@@ -111,5 +227,9 @@ export function ProjectKanban() {
     );
   }
 
-  return <ProjectSunsetPage projectName={project?.name} />;
+  return (
+    <OrgProvider organizationId={organizationId}>
+      <ProjectKanbanInner projectId={projectId} />
+    </OrgProvider>
+  );
 }
